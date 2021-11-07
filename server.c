@@ -24,6 +24,7 @@
 #include <arpa/inet.h>
 #include <sys/wait.h>
 #include <stdarg.h>
+#include <signal.h>
 
 #define BACKLOG 10     // how many pending connections queue will hold
 

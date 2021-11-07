@@ -1,7 +1,3 @@
-
-# Created by https://www.toptal.com/developers/gitignore/api/c,c++,clion+all,intellij+all,macos,windows
-# Edit at https://www.toptal.com/developers/gitignore?templates=c,c++,clion+all,intellij+all,macos,windows
-
 ### C ###
 # Prerequisites
 *.d
@@ -279,4 +275,6 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-# End of https://www.toptal.com/developers/gitignore/api/c,c++,clion+all,intellij+all,macos,windows
+# Project built files
+mysmtpd
+mypopd
