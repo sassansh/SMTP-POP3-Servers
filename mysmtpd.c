@@ -48,6 +48,7 @@ void handle_client(int fd) {
   uname(&my_uname);
 
   /* TO BE COMPLETED BY THE STUDENT */
+  send_formatted(fd, "220 Connection Established\n");
 
   while (1) {
     char command[5];
@@ -55,24 +56,21 @@ void handle_client(int fd) {
     nb_read_line(nb, recvbuf);
     memcpy(command, recvbuf, 4);
 
-    send_formatted(fd, "+CREATED HEllo \n");
-    send_formatted(fd, "+OK \n");
-
     int command_hash = hash_command(command);
     if (command_hash == HELP || command_hash == EXPN) {
-      printf("Command is not supported: %s\n", command);
-      send_formatted(fd, "+OK \n");
+      send_formatted(fd, "502 Unsupported command: %s\n", command);
       continue;
     }
 
     switch (command_hash) {
       case HELO:
         // implement
-        printf("yay hello\n");
+        send_formatted(fd, "250 OK %s\n", my_uname.__domainname);
         break;
       case EHLO: 
         // implement
         printf("wow so exclusive\n");
+        send_formatted(fd, "250 OK %s\n", my_uname.__domainname);
         break;
       case MAIL: 
         // implement
@@ -89,23 +87,20 @@ void handle_client(int fd) {
       case RSET: 
         // implement
         printf("hmm... I know this....\n");
+        send_formatted(fd, "250 OK\n");
         break;
       case VRFY: 
         // implement
         printf("hmm... I know this....\n");
         break;
       case NOOP: 
-        // implement
-        printf("Doing nothing.....\n");
+        send_formatted(fd, "250 OK\n");
         break;
       case QUIT: 
-        // implement
-        printf("Quitting ....\n");
+        send_formatted(fd, "221 Closing transmission Channel\n");
         goto quit;
       default:    
-        //imeplement
-        printf("Hashcode: %d\n", hash_command(command));
-        printf("Command is Invalid: %s\n", command);
+        send_formatted(fd, "500 Invalid command: %s\n", command);
     }
   } 
   quit: ;
