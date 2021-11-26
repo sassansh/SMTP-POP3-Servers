@@ -30,24 +30,22 @@ typedef enum {
   DATA_NEXT
 } state_t;
 
-state_t state = GREET_NEXT;
+state_t state;
 user_list_t forward_paths;
 int temp_file = -1;
 char temp_file_name[6];
 
 static void handle_client(int fd);
 
-static void hello(int fd, char* body, char *domain);
+static void hello(int fd, char *domain);
 
-static void mail(int fd, char* body);
+static void mail(int fd);
 
-static void recipient(int fd, char* body);
+static void recipient(int fd);
 
-static void data(int fd, char* body, net_buffer_t nb);
+static int data(int fd, net_buffer_t nb);
 
-static void verify(int fd, char* body);
-
-static char *get_param(char* buf);
+static void verify(int fd);
 
 static void initialize();
 
@@ -75,138 +73,136 @@ void handle_client(int fd) {
   struct utsname my_uname;
   uname(&my_uname);
 
-  /* TO BE COMPLETED BY THE STUDENT */
   send_formatted(fd, "220 Connection Established\n");
+  state = GREET_NEXT;
 
   while (1) {
-    nb_read_line(nb, recvbuf);
-    char* command = get_param(recvbuf);
+    int len = nb_read_line(nb, recvbuf);
 
-    int command_hash = hash_command(command);
-    if (command_hash == HELP || command_hash == EXPN) {
+    // Check client input validity and length
+    if (len == 0 || len == -1) break;
+    char* line = strtok(recvbuf, "\r\n"); 
+    if (strlen(line) == MAX_LINE_LENGTH) {
+      send_formatted(fd, "500 Line is too long\n");
+      continue;
+    }
+
+    char *command = strtok(line, " ");
+    int hashed_command = hash_command(command);
+    if  (hashed_command == HELP || hashed_command == EXPN) {
       send_formatted(fd, "502 Unsupported command: %s\n", command);
       continue;
     }
 
-    switch (command_hash) {
+    switch (hashed_command) {
       case HELO:
-        hello(fd, recvbuf + 4, my_uname.__domainname);
+        hello(fd, my_uname.__domainname);
         break;
       case EHLO:
-        hello(fd, recvbuf + 4, my_uname.__domainname);
+        hello(fd, my_uname.__domainname);
         break;
       case MAIL: 
-        mail(fd, recvbuf + 4);
+        mail(fd);
         break;
       case RCPT: 
-        recipient(fd, recvbuf + 4);
+        recipient(fd);
         break;
       case DATA: 
-        data(fd, recvbuf + 4, nb);
+        if (data(fd, nb) == -1) goto quit;
         break;
       case RSET: 
-        if (get_param(NULL) != NULL) {
-          send_formatted(fd, "501 Syntax error in parameter or arg\n");
-        } else {
-          clear();
-          send_formatted(fd, "250 OK\n");
-        }
+        clear();
+        state = MAIL_NEXT;
+        send_formatted(fd, "250 OK\n");
         break;
       case VRFY: 
-        verify(fd, recvbuf + 4);
+        verify(fd);
         break;
       case NOOP: 
         send_formatted(fd, "250 OK\n");
         break;
       case QUIT: 
-        if (get_param(NULL) != NULL) send_formatted(fd, "501 Syntax error in parameter or arg\n");
-        else {
-          clear();
-          send_formatted(fd, "221 Closing transmission Channel\n");
-          goto quit;
-        }
-        break;
+        send_formatted(fd, "221 Closing transmission Channel\n");
+        goto quit;
       default:    
         send_formatted(fd, "500 Invalid command: %s\n", command);
     }
   } 
+
   quit: ;
-  
+  clear();
   nb_destroy(nb);
 }
 
-void hello(int fd, char* body, char *domain) {
-  if (get_param(NULL)) {
-    if (!get_param(NULL)) {
-      clear();
-      state = MAIL_NEXT;
-      send_formatted(fd, "250 %s\n", domain);
-      return;
-    }
-  } 
-  send_formatted(fd, "550 no domain given\n");
+void hello(int fd, char *domain) {
+  if (state == GREET_NEXT) {
+    if (strtok(NULL, " ")) {
+    clear();
+    state = MAIL_NEXT;
+    send_formatted(fd, "250 %s\n", domain);
+    return;
+    } 
+    send_formatted(fd, "550 No domain given\n");
+  }
 }
 
-void mail(int fd, char* body) {
-  // E: 552, 451, 452, 550, 553, 503, 455, 555
-
-  // check that server was greeted and that no other transaction is in process
-  if (state != MAIL_NEXT || temp_file != -1) {
-    send_formatted(fd, "503 not greeted (Bad sequence of commands)\n");
+void mail(int fd) {
+  // check that server was greeted and that no other mail transaction is in process
+  if (state != MAIL_NEXT) {
+    send_formatted(fd, "503 Bad sequence of commands\n");
     return;
   }
 
-  char *param = get_param(NULL);
-  // Error, no params found
-  if (!param) send_formatted(fd, "501 no mail\n");
-  // Error if more than one param found
-  if (get_param(NULL)) send_formatted(fd, "550 more than one\n");
+  char *param = strtok(NULL, " ");
+  // Error, no parameter 
+  if (!param) {
+    send_formatted(fd, "550 No parameter found\n"); 
+    return;
+  }
   
-  // Check that reverse-path is specified with correct prefix and brackets
-  char prefix[7];
-  prefix[6] = '\0';
-  memcpy(prefix, param, 6);
-  if (strcmp(prefix, "FROM:<") != 0 || param[strlen(param) - 1]!='>') {
-    send_formatted(fd, "550 no domain given\n");   // might not need to enforce brackets
+  // Check that reverse-path is specified with correct prefix
+  char prefix[6];
+  prefix[5] = '\0';
+  memcpy(prefix, param, 5);
+  if (strcmp(prefix, "FROM:") != 0) {
+    send_formatted(fd, "550 Unsupported parameter\n"); 
     return;
   }
-    
 
-  clear();
   state = RCPT_NEXT;
+  clear();
   initialize();
   send_formatted(fd, "250 OK\n");
 }
 
-void recipient(int fd, char* body) {
+void recipient(int fd) {
   if (state != RCPT_NEXT && state != DATA_NEXT) {
-    send_formatted(fd, "503 not greeted (Bad sequence of commands)\n");
+    send_formatted(fd, "503 Bad sequence of commands\n");
     return;
   }
 
-  char *param = get_param(NULL);
+  char *param = strtok(NULL, " ");
   // Error, no params found
-  if (!param) send_formatted(fd, "501 no mail\n");
-  // Error if more than one param found
-  if (get_param(NULL)) send_formatted(fd, "550 no domain given\n");
+  if (!param) {
+    send_formatted(fd, "550 No parameters found\n");
+    return;;
+  }
   
-  // Check that reverse-path is specified with correct prefix and brackets
+  // Check that forward-path is specified with correct prefix and brackets
   char prefix[5];
   prefix[4] = '\0';
   memcpy(prefix, param, 4);
   if (strcmp(prefix, "TO:<") != 0 || param[strlen(param) - 1] !='>') {
-    send_formatted(fd, "550 no domain given\n");
+    send_formatted(fd, "550 Unsupported parameter\n");
     return;
   }
-    
 
   int user_length = strlen(param) - 5;
   char user[user_length + 1];
   user[user_length] = '\0';
   memcpy(user, param + 4, user_length);
 
-  printf("user:%s\n", user);
-  // only handle those in users.txt
+  // Add user to forward path if valid
   if (is_valid_user(user, NULL)) {
     add_user_to_list(&forward_paths, user);
     state = DATA_NEXT;
@@ -216,67 +212,58 @@ void recipient(int fd, char* body) {
   } 
 }
 
-void data(int fd, char* body, net_buffer_t nb) {
+// returns 1 if process is successful, returns -1 if client closed connection
+int data(int fd, net_buffer_t nb) {
   if (state != DATA_NEXT) {
     send_formatted(fd, "503 not greeted (Bad sequence of commands)\n");
-    return;
-  }
-
-  if (get_param(NULL) != NULL) {
-    send_formatted(fd, "501 Syntax error in parameter or arg");
-    return;
+    return 1;
   }
 
   send_formatted(fd, "354 Start mail input; end with <CRLF>.<CRLF>\n");
 
   char recvbuf[MAX_LINE_LENGTH + 1];
-  nb_read_line(nb, recvbuf);  // runtime check this runs properly
-  char* line = strtok(recvbuf, "\r\n");
+  char* line = "";
+  int len;
   while (strcmp(line, ".") != 0) {
-    write(temp_file, line, strlen(line));
-    write(temp_file, "\n", 1);
-    nb_read_line(nb, recvbuf);
+    len = nb_read_line(nb, recvbuf);
+    // check line is valid and connection is intact
+    if (len == 0 || len == -1) return -1;
     line = strtok(recvbuf, "\r\n");
+    if (strlen(line) == MAX_LINE_LENGTH) {
+      send_formatted(fd, "500 Line is too long\n");
+      return 1;
+    }
+
+    write(temp_file, recvbuf, len);
+    // write(temp_file, line, strlen(line));
+    // write(temp_file, "\n", 1);
   }
 
   save_user_mail(temp_file_name, forward_paths);
   clear();
   state = MAIL_NEXT;
   send_formatted(fd, "250 OK\n");
+  return 1;
 }
 
-void verify(int fd, char* body) {
-  if (is_valid_user(get_param(NULL), NULL)) {
-    // S: 250, 251, 252
-    send_formatted(fd, "250 <%s>\n", body);
+void verify(int fd) {
+  char *user = strtok(NULL, " ");
+  if (is_valid_user(user, NULL)) {
+    send_formatted(fd, "250 <%s>\n", user);
   } else {
-    // E: 550, 551, 553, 502, 504
     send_formatted(fd, "551 User not local\n");
   }
 }
 
-/** 
- * if buf is not null, returns the first argument and saves the rest internally
- * subsequent calls with NULL as a parameter returns the next argument parsed in buf
- * Returns: parameters seperated by SP, 
- */
-char *get_param(char* buf) {
-  if (buf) {
-    char* str = strtok(buf, "\r\n"); 
-    return strtok(str, " ");
-  } 
-  return strtok(NULL, " ");
-}
-
+// Set up data structures for mail transaction
 void initialize() {
   forward_paths = create_user_list();
   memcpy(temp_file_name, "XXXXXX", 6);;
   temp_file = mkstemp(temp_file_name);
-
 }
 
+// clears any mail transaction in progress
 void clear() {
-  state = GREET_NEXT;
   destroy_user_list(forward_paths);
   if (temp_file != -1) {
     close(temp_file);  
