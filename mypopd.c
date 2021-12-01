@@ -58,6 +58,8 @@ int main(int argc, char *argv[]) {
 void handle_client(int fd) {
 
     char *user = malloc(MAX_LINE_LENGTH);
+    mail_list_t user_mail_list;
+
     state_t state = GREETING_STATE;
 
     char recvbuf[MAX_LINE_LENGTH + 1];
@@ -102,6 +104,7 @@ void handle_client(int fd) {
                     send_formatted(fd, "-ERR Send USER command first with valid username\n");
                 } else if (state == AUTHORIZATION_STATE_PASSWORD) {
                     if (command_pass(fd, user)) {
+                        user_mail_list = load_user_mail(user);
                         state = TRANSACTION_STATE;
                     } else {
                         memset(user, 0, MAX_LINE_LENGTH);
@@ -154,7 +157,8 @@ bool command_pass(int fd, char *user) {
     }
 
     if (is_valid_user(user, pass_input)) {
-        send_formatted(fd, "+OK Logged in successfully, welcome %s!\n", user);
+        send_formatted(fd, "+OK Logged in successfully, welcome %s! (%d new messages)\n", user,
+                       get_mail_count(load_user_mail(user)));
         return 1;
     } else {
         send_formatted(fd, "-ERR Invalid password, login again with USER command first\n");
