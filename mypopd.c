@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <stdbool.h>
 
 #define MAX_LINE_LENGTH 1024
 
@@ -19,23 +20,28 @@
 #define NOOP 1270
 #define QUIT 1289
 
-#define HELP 758 // update hash
+#define TOP 721
+#define UIDL 1176
+#define APOP 1260
 
 typedef enum {
     GREETING_STATE,
-    AUTHORIZATION_STATE,
+    AUTHORIZATION_STATE_USERNAME,
+    AUTHORIZATION_STATE_PASSWORD,
     TRANSACTION_STATE,
     UPDATE_STATE,
     QUIT_STATE
 } state_t;
-
-state_t state;
 
 static void handle_client(int fd);
 
 int hash_command(char *command);
 
 void clear();
+
+bool command_user(int fd, char **user);
+
+bool command_pass(int fd, char *user);
 
 int main(int argc, char *argv[]) {
 
@@ -51,13 +57,16 @@ int main(int argc, char *argv[]) {
 
 void handle_client(int fd) {
 
+    char *user = malloc(MAX_LINE_LENGTH);
+    state_t state = GREETING_STATE;
+
     char recvbuf[MAX_LINE_LENGTH + 1];
     net_buffer_t nb = nb_create(fd, MAX_LINE_LENGTH);
 
-    state = GREETING_STATE;
-    send_formatted(fd, "+OK POP3 server ready\n");
-    state = AUTHORIZATION_STATE;
-
+    if (state == GREETING_STATE) {
+        send_formatted(fd, "+OK POP3 server ready\n");
+        state = AUTHORIZATION_STATE_USERNAME;
+    }
 
     while (1) {
         int len = nb_read_line(nb, recvbuf);
@@ -66,24 +75,44 @@ void handle_client(int fd) {
         if (len == 0 || len == -1) break;
         char *line = strtok(recvbuf, "\r\n");
         if (strlen(line) == MAX_LINE_LENGTH) {
-            send_formatted(fd, "500 Line is too long\n");
+            send_formatted(fd, "-ERR Line is too long\n");
             continue;
         }
 
         char *command = strtok(line, " ");
         int hashed_command = hash_command(command);
-        printf("%d\n", hashed_command);
-        if  (hashed_command == HELP) {
-            send_formatted(fd, "502 Unsupported command: %s\n", command);
+        if  (hashed_command == TOP || hashed_command == UIDL || hashed_command == APOP) {
+            send_formatted(fd, "-ERR Unsupported command: %s\n", command);
             continue;
         }
 
         switch (hashed_command) {
             case USER:
-                send_formatted(fd, "+OK\n");
-                break;
+
+                if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_PASSWORD) {
+                    memset(user, 0, MAX_LINE_LENGTH);
+                    if (command_user(fd, &user)) {
+                        state = AUTHORIZATION_STATE_PASSWORD;
+                    }
+                    break;
+                } else {
+                    send_formatted(fd, "-ERR Command not allowed in this state\n");
+                    break;
+                }
+
             case PASS:
-                send_formatted(fd, "+OK\n");
+                if (state == AUTHORIZATION_STATE_USERNAME) {
+                    send_formatted(fd, "-ERR Send USER command first with valid username\n");
+                } else if (state == AUTHORIZATION_STATE_PASSWORD) {
+                    if (command_pass(fd, user)) {
+                        state = TRANSACTION_STATE;
+                    } else {
+                        memset(user, 0, MAX_LINE_LENGTH);
+                        state = AUTHORIZATION_STATE_USERNAME;
+                    }
+                } else {
+                    send_formatted(fd, "-ERR Command not allowed in this state\n");
+                }
                 break;
             case STAT:
                 send_formatted(fd, "+OK\n");
@@ -105,10 +134,10 @@ void handle_client(int fd) {
                 send_formatted(fd, "+OK\n");
                 break;
             case QUIT:
-                send_formatted(fd, "+OK dewey POP3 server signing off\n");
+                send_formatted(fd, "+OK POP3 Server signing off\n");
                 goto quit;
             default:
-                send_formatted(fd, "-ERR invalid command: %s\n", command);
+                send_formatted(fd, "-ERR Invalid command: %s\n", command);
         }
 
     }
@@ -116,6 +145,43 @@ void handle_client(int fd) {
     quit: ;
     clear();
     nb_destroy(nb);
+}
+
+// Process the PASS command
+bool command_pass(int fd, char *user) {
+    char *pass_input = strtok(NULL, " ");
+
+    if (pass_input == NULL) {
+        send_formatted(fd, "-ERR No password provided, login again with USER command first\n");
+        return 0;
+    }
+
+    if (is_valid_user(user, pass_input)) {
+        send_formatted(fd, "+OK Logged in successfully, welcome %s!\n", user);
+        return 1;
+    } else {
+        send_formatted(fd, "-ERR Invalid password, login again with USER command first\n");
+        return 0;
+    }
+}
+
+// Process the USER command
+bool command_user(int fd, char **user) {
+    char *user_input = strtok(NULL, " ");
+
+    if (user_input == NULL) {
+        send_formatted(fd, "-ERR Mailbox name argument missing for USER command\n");
+        return 0;
+    }
+
+    if (is_valid_user(user_input, NULL)) {
+        send_formatted(fd, "+OK %s is a valid mailbox\n", user_input);
+        strncpy(*user, user_input, strlen(user_input));
+        return 1;
+    } else {
+        send_formatted(fd, "-ERR No mailbox for %s here\n", user_input);
+        return 0;
+    }
 }
 
 // undelete messages
