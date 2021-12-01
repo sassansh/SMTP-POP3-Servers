@@ -81,25 +81,22 @@ void handle_client(int fd) {
 
         char *command = strtok(line, " ");
         int hashed_command = hash_command(command);
-        if  (hashed_command == TOP || hashed_command == UIDL || hashed_command == APOP) {
+        if (hashed_command == TOP || hashed_command == UIDL || hashed_command == APOP) {
             send_formatted(fd, "-ERR Unsupported command: %s\n", command);
             continue;
         }
 
         switch (hashed_command) {
             case USER:
-
                 if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_PASSWORD) {
                     memset(user, 0, MAX_LINE_LENGTH);
                     if (command_user(fd, &user)) {
                         state = AUTHORIZATION_STATE_PASSWORD;
                     }
-                    break;
                 } else {
                     send_formatted(fd, "-ERR Command not allowed in this state\n");
-                    break;
                 }
-
+                break;
             case PASS:
                 if (state == AUTHORIZATION_STATE_USERNAME) {
                     send_formatted(fd, "-ERR Send USER command first with valid username\n");
@@ -142,7 +139,7 @@ void handle_client(int fd) {
 
     }
 
-    quit: ;
+    quit:;
     clear();
     nb_destroy(nb);
 }
@@ -190,6 +187,6 @@ void clear() {
 }
 
 int hash_command(char *command) {
-    if ( strlen(command) > 4 ) return -1;
-    return ((int) command[0]) + 3*((int) command[1]) + 5*((int) command[2]) + 7*((int) command[3]);
+    if (strlen(command) > 4) return -1;
+    return ((int) command[0]) + 3 * ((int) command[1]) + 5 * ((int) command[2]) + 7 * ((int) command[3]);
 }
