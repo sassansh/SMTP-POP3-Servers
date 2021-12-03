@@ -29,8 +29,7 @@ typedef enum {
     AUTHORIZATION_STATE_USERNAME,
     AUTHORIZATION_STATE_PASSWORD,
     TRANSACTION_STATE,
-    UPDATE_STATE,
-    QUIT_STATE
+    UPDATE_STATE
 } state_t;
 
 static void handle_client(int fd);
@@ -96,7 +95,7 @@ void handle_client(int fd) {
                         state = AUTHORIZATION_STATE_PASSWORD;
                     }
                 } else {
-                    send_formatted(fd, "-ERR Command not allowed in this state\r\n");
+                    send_formatted(fd, "-ERR Already logged in!\r\n");
                 }
                 break;
             case PASS:
@@ -111,30 +110,56 @@ void handle_client(int fd) {
                         state = AUTHORIZATION_STATE_USERNAME;
                     }
                 } else {
-                    send_formatted(fd, "-ERR Command not allowed in this state\r\n");
+                    send_formatted(fd, "-ERR Already logged in!\r\n");
                 }
                 break;
             case STAT:
-                send_formatted(fd, "+OK\r\n");
+                if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_USERNAME) {
+                    send_formatted(fd, "-ERR Login first using USER and PASS commands!\r\n");
+                } else if (state == TRANSACTION_STATE) {
+                    send_formatted(fd, "+OK STAT received!\r\n");
+                }
                 break;
             case LIST:
-                send_formatted(fd, "+OK\r\n");
+                if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_USERNAME) {
+                    send_formatted(fd, "-ERR Login first using USER and PASS commands!\r\n");
+                } else if (state == TRANSACTION_STATE) {
+                    send_formatted(fd, "+OK LIST received!\r\n");
+                }
                 break;
             case RETR:
-                send_formatted(fd, "+OK\r\n");
+                if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_USERNAME) {
+                    send_formatted(fd, "-ERR Login first using USER and PASS commands!\r\n");
+                } else if (state == TRANSACTION_STATE) {
+                    send_formatted(fd, "+OK RETR received!\r\n");
+                }
                 break;
             case DELE:
-                send_formatted(fd, "+OK\r\n");
+                if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_USERNAME) {
+                    send_formatted(fd, "-ERR Login first using USER and PASS commands!\r\n");
+                } else if (state == TRANSACTION_STATE) {
+                    send_formatted(fd, "+OK DELE received!\r\n");
+                }
                 break;
             case RSET:
-                clear();
-                send_formatted(fd, "+OK\r\n");
+                if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_USERNAME) {
+                    send_formatted(fd, "-ERR Login first using USER and PASS commands!\r\n");
+                } else if (state == TRANSACTION_STATE) {
+                    clear();
+                    send_formatted(fd, "+OK RSET received!\r\n");
+                }
                 break;
             case NOOP:
                 send_formatted(fd, "+OK noop received!\r\n");
                 break;
             case QUIT:
-                send_formatted(fd, "+OK POP3 Server signing off\r\n");
+                if (state == TRANSACTION_STATE) {
+                    send_formatted(fd, "+OK POP3 Server signing off. Bye %s!\r\n", user);
+                    state = UPDATE_STATE;
+                } else {
+                    send_formatted(fd, "+OK POP3 Server signing off\r\n");
+                }
+
                 goto quit;
             default:
                 send_formatted(fd, "-ERR Invalid command: %s\r\n", command);
