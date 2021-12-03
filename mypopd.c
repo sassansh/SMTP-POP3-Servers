@@ -116,35 +116,35 @@ void handle_client(int fd) {
             case STAT:
                 if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_USERNAME) {
                     send_formatted(fd, "-ERR Login first using USER and PASS commands!\r\n");
-                } else if (state == TRANSACTION_STATE) {
+                } else {
                     send_formatted(fd, "+OK STAT received!\r\n");
                 }
                 break;
             case LIST:
                 if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_USERNAME) {
                     send_formatted(fd, "-ERR Login first using USER and PASS commands!\r\n");
-                } else if (state == TRANSACTION_STATE) {
+                } else {
                     send_formatted(fd, "+OK LIST received!\r\n");
                 }
                 break;
             case RETR:
                 if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_USERNAME) {
                     send_formatted(fd, "-ERR Login first using USER and PASS commands!\r\n");
-                } else if (state == TRANSACTION_STATE) {
+                } else {
                     send_formatted(fd, "+OK RETR received!\r\n");
                 }
                 break;
             case DELE:
                 if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_USERNAME) {
                     send_formatted(fd, "-ERR Login first using USER and PASS commands!\r\n");
-                } else if (state == TRANSACTION_STATE) {
+                } else {
                     send_formatted(fd, "+OK DELE received!\r\n");
                 }
                 break;
             case RSET:
                 if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_USERNAME) {
                     send_formatted(fd, "-ERR Login first using USER and PASS commands!\r\n");
-                } else if (state == TRANSACTION_STATE) {
+                } else {
                     clear();
                     send_formatted(fd, "+OK RSET received!\r\n");
                 }
