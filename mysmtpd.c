@@ -56,7 +56,7 @@ static int hash_command(char *command);
 int main(int argc, char *argv[]) {
   
   if (argc != 2) {
-    fprintf(stderr, "Invalid arguments. Expected: %s <port>\n", argv[0]);
+    fprintf(stderr, "Invalid arguments. Expected: %s <port>\r\n", argv[0]);
     return 1;
   }
   
@@ -73,7 +73,7 @@ void handle_client(int fd) {
   struct utsname my_uname;
   uname(&my_uname);
 
-  send_formatted(fd, "220 Connection Established\n");
+  send_formatted(fd, "220 Connection Established\r\n");
   state = GREET_NEXT;
 
   while (1) {
@@ -83,23 +83,23 @@ void handle_client(int fd) {
     if (len == 0 || len == -1) break;
     char* line = strtok(recvbuf, "\r\n"); 
     if (strlen(line) == MAX_LINE_LENGTH) {
-      send_formatted(fd, "500 Line is too long\n");
+      send_formatted(fd, "500 Line is too long\r\n");
       continue;
     }
 
     char *command = strtok(line, " ");
     int hashed_command = hash_command(command);
     if  (hashed_command == HELP || hashed_command == EXPN) {
-      send_formatted(fd, "502 Unsupported command: %s\n", command);
+      send_formatted(fd, "502 Unsupported command: %s\r\n", command);
       continue;
     }
 
     switch (hashed_command) {
       case HELO:
-        hello(fd, my_uname.__domainname);
+        hello(fd, my_uname.nodename);
         break;
       case EHLO:
-        hello(fd, my_uname.__domainname);
+        hello(fd, my_uname.nodename);
         break;
       case MAIL: 
         mail(fd);
@@ -113,19 +113,19 @@ void handle_client(int fd) {
       case RSET: 
         clear();
         state = MAIL_NEXT;
-        send_formatted(fd, "250 OK\n");
+        send_formatted(fd, "250 OK\r\n");
         break;
       case VRFY: 
         verify(fd);
         break;
       case NOOP: 
-        send_formatted(fd, "250 OK\n");
+        send_formatted(fd, "250 OK\r\n");
         break;
       case QUIT: 
-        send_formatted(fd, "221 Closing transmission Channel\n");
+        send_formatted(fd, "221 Closing transmission Channel\r\n");
         goto quit;
       default:    
-        send_formatted(fd, "500 Invalid command: %s\n", command);
+        send_formatted(fd, "500 Invalid command: %s\r\n", command);
     }
   } 
 
@@ -139,52 +139,52 @@ void hello(int fd, char *domain) {
     if (strtok(NULL, " ")) {
     clear();
     state = MAIL_NEXT;
-    send_formatted(fd, "250 %s\n", domain);
+    send_formatted(fd, "250 %s\r\n", domain);
     return;
     } 
-    send_formatted(fd, "550 No domain given\n");
+    send_formatted(fd, "550 No domain given\r\n");
   }
 }
 
 void mail(int fd) {
   // check that server was greeted and that no other mail transaction is in process
   if (state != MAIL_NEXT) {
-    send_formatted(fd, "503 Bad sequence of commands\n");
+    send_formatted(fd, "503 Bad sequence of commands\r\n");
     return;
   }
 
   char *param = strtok(NULL, " ");
   // Error, no parameter 
   if (!param) {
-    send_formatted(fd, "550 No parameter found\n"); 
+    send_formatted(fd, "501 No parameter found\r\n"); 
     return;
   }
   
   // Check that reverse-path is specified with correct prefix
-  char prefix[6];
-  prefix[5] = '\0';
-  memcpy(prefix, param, 5);
-  if (strcmp(prefix, "FROM:") != 0) {
-    send_formatted(fd, "550 Unsupported parameter\n"); 
+  char prefix[7];
+  prefix[6] = '\0';
+  memcpy(prefix, param, 6);
+  if (strcmp(prefix, "FROM:<" ) != 0 || param[strlen(param) - 1] !='>') {
+    send_formatted(fd, "501 Unsupported parameter\r\n"); 
     return;
   }
 
   state = RCPT_NEXT;
   clear();
   initialize();
-  send_formatted(fd, "250 OK\n");
+  send_formatted(fd, "250 OK\r\n");
 }
 
 void recipient(int fd) {
   if (state != RCPT_NEXT && state != DATA_NEXT) {
-    send_formatted(fd, "503 Bad sequence of commands\n");
+    send_formatted(fd, "503 Bad sequence of commands\r\n");
     return;
   }
 
   char *param = strtok(NULL, " ");
   // Error, no params found
   if (!param) {
-    send_formatted(fd, "550 No parameters found\n");
+    send_formatted(fd, "501 No parameters found\r\n");
     return;;
   }
   
@@ -193,7 +193,7 @@ void recipient(int fd) {
   prefix[4] = '\0';
   memcpy(prefix, param, 4);
   if (strcmp(prefix, "TO:<") != 0 || param[strlen(param) - 1] !='>') {
-    send_formatted(fd, "550 Unsupported parameter\n");
+    send_formatted(fd, "501 Unsupported parameter\r\n");
     return;
   }
 
@@ -206,20 +206,20 @@ void recipient(int fd) {
   if (is_valid_user(user, NULL)) {
     add_user_to_list(&forward_paths, user);
     state = DATA_NEXT;
-    send_formatted(fd, "250 OK\n");
+    send_formatted(fd, "250 OK\r\n");
   } else {
-    send_formatted(fd, "550 No such user here\n");
+    send_formatted(fd, "550 No such user here\r\n");
   } 
 }
 
 // returns 1 if process is successful, returns -1 if client closed connection
 int data(int fd, net_buffer_t nb) {
   if (state != DATA_NEXT) {
-    send_formatted(fd, "503 not greeted (Bad sequence of commands)\n");
+    send_formatted(fd, "503 not greeted (Bad sequence of commands)\r\n");
     return 1;
   }
 
-  send_formatted(fd, "354 Start mail input; end with <CRLF>.<CRLF>\n");
+  send_formatted(fd, "354 Start mail input; end with <CRLF>.<CRLF>\r\n");
 
   char recvbuf[MAX_LINE_LENGTH + 1];
   char* line = "";
@@ -230,28 +230,33 @@ int data(int fd, net_buffer_t nb) {
     if (len == 0 || len == -1) return -1;
     line = strtok(recvbuf, "\r\n");
     if (strlen(line) == MAX_LINE_LENGTH) {
-      send_formatted(fd, "500 Line is too long\n");
+      send_formatted(fd, "500 Line is too long\r\n");
       return 1;
     }
 
     write(temp_file, recvbuf, len);
     // write(temp_file, line, strlen(line));
-    // write(temp_file, "\n", 1);
+    // write(temp_file, "\r\n", 1);
   }
 
   save_user_mail(temp_file_name, forward_paths);
   clear();
   state = MAIL_NEXT;
-  send_formatted(fd, "250 OK\n");
+  send_formatted(fd, "250 OK\r\n");
   return 1;
 }
 
 void verify(int fd) {
   char *user = strtok(NULL, " ");
+  // Error, no parameter 
+  if (!user) {
+    send_formatted(fd, "501 No parameter found\r\n"); 
+    return;
+  }
   if (is_valid_user(user, NULL)) {
-    send_formatted(fd, "250 <%s>\n", user);
+    send_formatted(fd, "250 <%s>\r\n", user);
   } else {
-    send_formatted(fd, "551 User not local\n");
+    send_formatted(fd, "550 User not local\r\n");
   }
 }
 
