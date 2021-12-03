@@ -131,7 +131,7 @@ void handle_client(int fd) {
                 send_formatted(fd, "+OK\r\n");
                 break;
             case NOOP:
-                send_formatted(fd, "+OK\r\n");
+                send_formatted(fd, "+OK noop received!\r\n");
                 break;
             case QUIT:
                 send_formatted(fd, "+OK POP3 Server signing off\r\n");
