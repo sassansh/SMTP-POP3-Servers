@@ -32,8 +32,6 @@ typedef enum {
 
 state_t state;
 user_list_t forward_paths;
-int temp_file = -1;
-char temp_file_name[6];
 
 static void handle_client(int fd);
 
@@ -43,13 +41,9 @@ static void mail(int fd);
 
 static void recipient(int fd);
 
-static int data(int fd, net_buffer_t nb);
+static void data(int fd, net_buffer_t nb);
 
 static void verify(int fd);
-
-static void initialize();
-
-static void clear();
 
 static int hash_command(char *command);
 
@@ -111,7 +105,6 @@ void handle_client(int fd) {
         if (data(fd, nb) == -1) goto quit;
         break;
       case RSET: 
-        clear();
         state = MAIL_NEXT;
         send_formatted(fd, "250 OK\r\n");
         break;
@@ -130,14 +123,12 @@ void handle_client(int fd) {
   } 
 
   quit: ;
-  clear();
   nb_destroy(nb);
 }
 
 void hello(int fd, char *domain) {
   if (state == GREET_NEXT) {
     if (strtok(NULL, " ")) {
-    clear();
     state = MAIL_NEXT;
     send_formatted(fd, "250 %s\r\n", domain);
     return;
@@ -159,19 +150,15 @@ void mail(int fd) {
     send_formatted(fd, "501 No parameter found\r\n"); 
     return;
   }
-  
   // Check that reverse-path is specified with correct prefix
-  char prefix[7];
-  prefix[6] = '\0';
-  memcpy(prefix, param, 6);
-  if (strcmp(prefix, "FROM:<" ) != 0 || param[strlen(param) - 1] !='>') {
+  if (strncasecmp(param, "FROM:<", 4)  != 0 || param[strlen(param) - 1] !='>') {
     send_formatted(fd, "501 Unsupported parameter\r\n"); 
     return;
   }
 
   state = RCPT_NEXT;
-  clear();
-  initialize();
+  destroy_user_list(forward_paths);
+  forward_paths = create_user_list();
   send_formatted(fd, "250 OK\r\n");
 }
 
@@ -187,12 +174,8 @@ void recipient(int fd) {
     send_formatted(fd, "501 No parameters found\r\n");
     return;;
   }
-  
   // Check that forward-path is specified with correct prefix and brackets
-  char prefix[5];
-  prefix[4] = '\0';
-  memcpy(prefix, param, 4);
-  if (strcmp(prefix, "TO:<") != 0 || param[strlen(param) - 1] !='>') {
+  if (strncasecmp(param, "TO:<", 4) != 0 || param[strlen(param) - 1] !='>') {
     send_formatted(fd, "501 Unsupported parameter\r\n");
     return;
   }
@@ -213,37 +196,29 @@ void recipient(int fd) {
 }
 
 // returns 1 if process is successful, returns -1 if client closed connection
-int data(int fd, net_buffer_t nb) {
+void data(int fd, net_buffer_t nb) {
   if (state != DATA_NEXT) {
     send_formatted(fd, "503 not greeted (Bad sequence of commands)\r\n");
-    return 1;
+    return;
   }
 
   send_formatted(fd, "354 Start mail input; end with <CRLF>.<CRLF>\r\n");
+  
+  char temp_file_name[] = "Temp-XXXXXX";
+  int temp_file = mkstemp(temp_file_name);
 
   char recvbuf[MAX_LINE_LENGTH + 1];
-  char* line = "";
-  int len;
-  while (strcmp(line, ".") != 0) {
-    len = nb_read_line(nb, recvbuf);
-    // check line is valid and connection is intact
-    if (len == 0 || len == -1) return -1;
-    line = strtok(recvbuf, "\r\n");
-    if (strlen(line) == MAX_LINE_LENGTH) {
-      send_formatted(fd, "500 Line is too long\r\n");
-      return 1;
-    }
-
+  int len = nb_read_line(nb, recvbuf);
+  while (strcmp(recvbuf, ".\r\n") != 0 && len > 0) {
     write(temp_file, recvbuf, len);
-    // write(temp_file, line, strlen(line));
-    // write(temp_file, "\r\n", 1);
+    len = nb_read_line(nb, recvbuf);    
   }
 
   save_user_mail(temp_file_name, forward_paths);
-  clear();
+  unlink(temp_file_name);
+  close(temp_file);
   state = MAIL_NEXT;
   send_formatted(fd, "250 OK\r\n");
-  return 1;
 }
 
 void verify(int fd) {
@@ -254,25 +229,9 @@ void verify(int fd) {
     return;
   }
   if (is_valid_user(user, NULL)) {
-    send_formatted(fd, "250 <%s>\r\n", user);
+    send_formatted(fd, "250 <%s> is a valid user\r\n", user);
   } else {
-    send_formatted(fd, "550 User not local\r\n");
-  }
-}
-
-// Set up data structures for mail transaction
-void initialize() {
-  forward_paths = create_user_list();
-  memcpy(temp_file_name, "XXXXXX", 6);;
-  temp_file = mkstemp(temp_file_name);
-}
-
-// clears any mail transaction in progress
-void clear() {
-  destroy_user_list(forward_paths);
-  if (temp_file != -1) {
-    close(temp_file);  
-    temp_file = -1;
+    send_formatted(fd, "550 User <%s> not local\r\n", user);
   }
 }
 
