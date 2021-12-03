@@ -46,7 +46,7 @@ bool command_pass(int fd, char *user);
 int main(int argc, char *argv[]) {
 
     if (argc != 2) {
-        fprintf(stderr, "Invalid arguments. Expected: %s <port>\n", argv[0]);
+        fprintf(stderr, "Invalid arguments. Expected: %s <port>\r\n", argv[0]);
         return 1;
     }
 
@@ -66,7 +66,7 @@ void handle_client(int fd) {
     net_buffer_t nb = nb_create(fd, MAX_LINE_LENGTH);
 
     if (state == GREETING_STATE) {
-        send_formatted(fd, "+OK POP3 server ready\n");
+        send_formatted(fd, "+OK POP3 server ready\r\n");
         state = AUTHORIZATION_STATE_USERNAME;
     }
 
@@ -77,14 +77,14 @@ void handle_client(int fd) {
         if (len == 0 || len == -1) break;
         char *line = strtok(recvbuf, "\r\n");
         if (strlen(line) == MAX_LINE_LENGTH) {
-            send_formatted(fd, "-ERR Line is too long\n");
+            send_formatted(fd, "-ERR Line is too long\r\n");
             continue;
         }
 
         char *command = strtok(line, " ");
         int hashed_command = hash_command(command);
         if (hashed_command == TOP || hashed_command == UIDL || hashed_command == APOP) {
-            send_formatted(fd, "-ERR Unsupported command: %s\n", command);
+            send_formatted(fd, "-ERR Unsupported command: %s\r\n", command);
             continue;
         }
 
@@ -96,12 +96,12 @@ void handle_client(int fd) {
                         state = AUTHORIZATION_STATE_PASSWORD;
                     }
                 } else {
-                    send_formatted(fd, "-ERR Command not allowed in this state\n");
+                    send_formatted(fd, "-ERR Command not allowed in this state\r\n");
                 }
                 break;
             case PASS:
                 if (state == AUTHORIZATION_STATE_USERNAME) {
-                    send_formatted(fd, "-ERR Send USER command first with valid username\n");
+                    send_formatted(fd, "-ERR Send USER command first with valid username\r\n");
                 } else if (state == AUTHORIZATION_STATE_PASSWORD) {
                     if (command_pass(fd, user)) {
                         user_mail_list = load_user_mail(user);
@@ -111,33 +111,33 @@ void handle_client(int fd) {
                         state = AUTHORIZATION_STATE_USERNAME;
                     }
                 } else {
-                    send_formatted(fd, "-ERR Command not allowed in this state\n");
+                    send_formatted(fd, "-ERR Command not allowed in this state\r\n");
                 }
                 break;
             case STAT:
-                send_formatted(fd, "+OK\n");
+                send_formatted(fd, "+OK\r\n");
                 break;
             case LIST:
-                send_formatted(fd, "+OK\n");
+                send_formatted(fd, "+OK\r\n");
                 break;
             case RETR:
-                send_formatted(fd, "+OK\n");
+                send_formatted(fd, "+OK\r\n");
                 break;
             case DELE:
-                send_formatted(fd, "+OK\n");
+                send_formatted(fd, "+OK\r\n");
                 break;
             case RSET:
                 clear();
-                send_formatted(fd, "+OK\n");
+                send_formatted(fd, "+OK\r\n");
                 break;
             case NOOP:
-                send_formatted(fd, "+OK\n");
+                send_formatted(fd, "+OK\r\n");
                 break;
             case QUIT:
-                send_formatted(fd, "+OK POP3 Server signing off\n");
+                send_formatted(fd, "+OK POP3 Server signing off\r\n");
                 goto quit;
             default:
-                send_formatted(fd, "-ERR Invalid command: %s\n", command);
+                send_formatted(fd, "-ERR Invalid command: %s\r\n", command);
         }
 
     }
@@ -152,16 +152,16 @@ bool command_pass(int fd, char *user) {
     char *pass_input = strtok(NULL, " ");
 
     if (pass_input == NULL) {
-        send_formatted(fd, "-ERR No password provided, login again with USER command first\n");
+        send_formatted(fd, "-ERR No password provided, login again with USER command first\r\n");
         return 0;
     }
 
     if (is_valid_user(user, pass_input)) {
-        send_formatted(fd, "+OK Logged in successfully, welcome %s! (%d new messages)\n", user,
+        send_formatted(fd, "+OK Logged in successfully, welcome %s! (%d new messages)\r\n", user,
                        get_mail_count(load_user_mail(user)));
         return 1;
     } else {
-        send_formatted(fd, "-ERR Invalid password, login again with USER command first\n");
+        send_formatted(fd, "-ERR Invalid password, login again with USER command first\r\n");
         return 0;
     }
 }
@@ -171,16 +171,16 @@ bool command_user(int fd, char **user) {
     char *user_input = strtok(NULL, " ");
 
     if (user_input == NULL) {
-        send_formatted(fd, "-ERR Mailbox name argument missing for USER command\n");
+        send_formatted(fd, "-ERR Mailbox name argument missing for USER command\r\n");
         return 0;
     }
 
     if (is_valid_user(user_input, NULL)) {
-        send_formatted(fd, "+OK %s is a valid mailbox\n", user_input);
+        send_formatted(fd, "+OK %s is a valid mailbox\r\n", user_input);
         strncpy(*user, user_input, strlen(user_input));
         return 1;
     } else {
-        send_formatted(fd, "-ERR No mailbox for %s here\n", user_input);
+        send_formatted(fd, "-ERR No mailbox for %s here\r\n", user_input);
         return 0;
     }
 }
