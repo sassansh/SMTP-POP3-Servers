@@ -42,9 +42,11 @@ bool command_user(int fd, char **user);
 
 bool command_pass(int fd, char *user);
 
-void command_list(int fd, mail_list_t mail_list);
+void command_list(int fd, mail_list_t mail_list, unsigned int mail_count);
 
-void command_retr(int fd, mail_list_t mail_list);
+void command_retr(int fd, mail_list_t mail_list, unsigned int mail_count);
+
+void command_dele(int fd, mail_list_t mail_list);
 
 int main(int argc, char *argv[]) {
 
@@ -62,6 +64,7 @@ void handle_client(int fd) {
 
     char *user = malloc(MAX_LINE_LENGTH);
     mail_list_t user_mail_list;
+    unsigned int mail_count;
 
     state_t state = GREETING_STATE;
 
@@ -110,6 +113,7 @@ void handle_client(int fd) {
                 } else if (state == AUTHORIZATION_STATE_PASSWORD) {
                     if (command_pass(fd, user)) {
                         user_mail_list = load_user_mail(user);
+                        mail_count = get_mail_count(user_mail_list);
                         state = TRANSACTION_STATE;
                     } else {
                         memset(user, 0, MAX_LINE_LENGTH);
@@ -131,21 +135,21 @@ void handle_client(int fd) {
                 if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_PASSWORD) {
                     send_formatted(fd, "-ERR Login first using USER and PASS commands!\r\n");
                 } else {
-                    command_list(fd, user_mail_list);
+                    command_list(fd, user_mail_list, mail_count);
                 }
                 break;
             case RETR:
                 if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_PASSWORD) {
                     send_formatted(fd, "-ERR Login first using USER and PASS commands!\r\n");
                 } else {
-                    command_retr(fd, user_mail_list);
+                    command_retr(fd, user_mail_list, mail_count);
                 }
                 break;
             case DELE:
                 if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_PASSWORD) {
                     send_formatted(fd, "-ERR Login first using USER and PASS commands!\r\n");
                 } else {
-                    send_formatted(fd, "+OK DELE received!\r\n");
+                    command_dele(fd, user_mail_list);
                 }
                 break;
             case RSET:
@@ -179,7 +183,27 @@ void handle_client(int fd) {
     nb_destroy(nb);
 }
 
-void command_retr(int fd, mail_list_t mail_list) {
+void command_dele(int fd, mail_list_t mail_list) {
+    char *msg_num_input = strtok(NULL, " ");
+
+    if (msg_num_input == NULL) {
+        send_formatted(fd, "-ERR No message number given. Nothing deleted!\r\n");
+        return;
+    } else {
+        int msg_num = atoi(msg_num_input);
+        mail_item_t mail_item = get_mail_item(mail_list, msg_num - 1);
+        if (mail_item == NULL || msg_num < 1) {
+            send_formatted(fd, "-ERR Message %d already deleted or does not exist!\r\n", msg_num);
+            return;
+        }
+
+        mark_mail_item_deleted(mail_item);
+        send_formatted(fd, "+OK Message %d deleted!\r\n", msg_num);
+    }
+
+}
+
+void command_retr(int fd, mail_list_t mail_list, unsigned int mail_count) {
     char *msg_num_input = strtok(NULL, " ");
 
     if (msg_num_input == NULL) {
@@ -188,7 +212,7 @@ void command_retr(int fd, mail_list_t mail_list) {
     } else {
         int msg_num = atoi(msg_num_input);
         mail_item_t mail_item = get_mail_item(mail_list, msg_num - 1);
-        if (mail_item == NULL || msg_num < 1 || msg_num > get_mail_count(mail_list)) {
+        if (mail_item == NULL || msg_num < 1 || msg_num > mail_count) {
             send_formatted(fd, "-ERR Message %d does not exist or deleted!\r\n", msg_num);
             return;
         }
@@ -205,22 +229,25 @@ void command_retr(int fd, mail_list_t mail_list) {
     }
 }
 
-void command_list(int fd, mail_list_t mail_list) {
+void command_list(int fd, mail_list_t mail_list, unsigned int mail_count) {
     char *msg_num_input = strtok(NULL, " ");
 
     if (msg_num_input == NULL) {
         send_formatted(fd, "+OK %d messages (%zu octets)\r\n",
                        get_mail_count(mail_list), get_mail_list_size(mail_list));
-        for (int i = 0; i < get_mail_count(mail_list); i++) {
-            send_formatted(fd, "%d %zu\r\n", i + 1, get_mail_item_size(get_mail_item(mail_list, i)));
+        for (int i = 0; i < mail_count; i++) {
+            mail_item_t mail_item = get_mail_item(mail_list, i);
+            if (mail_item != NULL) {
+                send_formatted(fd, "%d %zu\r\n", i + 1, get_mail_item_size(mail_item));
+            }
         }
         send_formatted(fd, ".\r\n");
         return;
     } else {
         int msg_num = atoi(msg_num_input);
         mail_item_t mail_item = get_mail_item(mail_list, msg_num - 1);
-        if (mail_item == NULL || msg_num < 1 || msg_num > get_mail_count(mail_list)) {
-            send_formatted(fd, "-ERR Message %d does not exist!\r\n", msg_num);
+        if (mail_item == NULL || msg_num < 1 || msg_num > mail_count) {
+            send_formatted(fd, "-ERR Message %d does not exist or deleted!\r\n", msg_num);
             return;
         }
 
