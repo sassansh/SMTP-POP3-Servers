@@ -95,6 +95,8 @@ void handle_client(int fd) {
                     memset(user, 0, MAX_LINE_LENGTH);
                     if (command_user(fd, &user)) {
                         state = AUTHORIZATION_STATE_PASSWORD;
+                    } else {
+                        state = AUTHORIZATION_STATE_USERNAME;
                     }
                 } else {
                     send_formatted(fd, "-ERR Already logged in!\r\n");
@@ -119,7 +121,7 @@ void handle_client(int fd) {
                 if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_PASSWORD) {
                     send_formatted(fd, "-ERR Login first using USER and PASS commands!\r\n");
                 } else {
-                    send_formatted(fd, "+OK %d %d\r\n", get_mail_count(user_mail_list),
+                    send_formatted(fd, "+OK %d %zu\r\n", get_mail_count(user_mail_list),
                                    get_mail_list_size(user_mail_list));
                 }
                 break;
@@ -179,9 +181,12 @@ void command_list(int fd, mail_list_t mail_list) {
     char *msg_num_input = strtok(NULL, " ");
 
     if (msg_num_input == NULL) {
-        send_formatted(fd, "+OK %d messages (%d octets)\r\n",
+        send_formatted(fd, "+OK %d messages (%zu octets)\r\n",
                        get_mail_count(mail_list), get_mail_list_size(mail_list));
-        // Print all mail
+        for (int i = 0; i < get_mail_count(mail_list); i++) {
+            send_formatted(fd, "%d %zu\r\n", i + 1, get_mail_item_size(get_mail_item(mail_list, i)));
+        }
+        send_formatted(fd, ".\r\n");
         return;
     } else {
         int msg_num = atoi(msg_num_input);
@@ -191,7 +196,7 @@ void command_list(int fd, mail_list_t mail_list) {
             return;
         }
 
-        send_formatted(fd, "+OK %d %d\r\n", msg_num, get_mail_item_size(mail_item));
+        send_formatted(fd, "+OK %d %zu\r\n", msg_num, get_mail_item_size(mail_item));
     }
 }
 
@@ -219,6 +224,7 @@ bool command_user(int fd, char **user) {
     char *user_input = strtok(NULL, " ");
 
     if (user_input == NULL) {
+        strncpy(*user, "", MAX_LINE_LENGTH);
         send_formatted(fd, "-ERR Mailbox name argument missing for USER command\r\n");
         return 0;
     }
