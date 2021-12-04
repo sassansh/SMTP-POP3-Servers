@@ -156,8 +156,9 @@ void handle_client(int fd) {
                 if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_PASSWORD) {
                     send_formatted(fd, "-ERR Login first using USER and PASS commands!\r\n");
                 } else {
-                    clear();
-                    send_formatted(fd, "+OK RSET received!\r\n");
+                    reset_mail_list_deleted_flag(user_mail_list);
+                    send_formatted(fd, "+OK Resetting... %d messages (%zu octets)\r\n",
+                                   get_mail_count(user_mail_list), get_mail_list_size(user_mail_list));
                 }
                 break;
             case NOOP:
