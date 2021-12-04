@@ -44,6 +44,8 @@ bool command_pass(int fd, char *user);
 
 void command_list(int fd, mail_list_t mail_list);
 
+void command_retr(int fd, mail_list_t mail_list);
+
 int main(int argc, char *argv[]) {
 
     if (argc != 2) {
@@ -136,7 +138,7 @@ void handle_client(int fd) {
                 if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_PASSWORD) {
                     send_formatted(fd, "-ERR Login first using USER and PASS commands!\r\n");
                 } else {
-                    send_formatted(fd, "+OK RETR received!\r\n");
+                    command_retr(fd, user_mail_list);
                 }
                 break;
             case DELE:
@@ -177,6 +179,32 @@ void handle_client(int fd) {
     nb_destroy(nb);
 }
 
+void command_retr(int fd, mail_list_t mail_list) {
+    char *msg_num_input = strtok(NULL, " ");
+
+    if (msg_num_input == NULL) {
+        send_formatted(fd, "-ERR No message number given!\r\n");
+        return;
+    } else {
+        int msg_num = atoi(msg_num_input);
+        mail_item_t mail_item = get_mail_item(mail_list, msg_num - 1);
+        if (mail_item == NULL || msg_num < 1 || msg_num > get_mail_count(mail_list)) {
+            send_formatted(fd, "-ERR Message %d does not exist or deleted!\r\n", msg_num);
+            return;
+        }
+
+        send_formatted(fd, "+OK %zu octets\r\n", get_mail_item_size(mail_item));
+
+        FILE *mail_item_data = get_mail_item_contents(mail_item);
+        char buffer[MAX_LINE_LENGTH];
+        while (fgets(buffer, MAX_LINE_LENGTH, mail_item_data) != NULL) {
+            send_formatted(fd, "%s", buffer);
+        }
+        fclose(mail_item_data);
+        send_formatted(fd, ".\r\n");
+    }
+}
+
 void command_list(int fd, mail_list_t mail_list) {
     char *msg_num_input = strtok(NULL, " ");
 
@@ -190,9 +218,9 @@ void command_list(int fd, mail_list_t mail_list) {
         return;
     } else {
         int msg_num = atoi(msg_num_input);
-        mail_item_t mail_item = get_mail_item(mail_list, msg_num);
+        mail_item_t mail_item = get_mail_item(mail_list, msg_num - 1);
         if (mail_item == NULL || msg_num < 1 || msg_num > get_mail_count(mail_list)) {
-            send_formatted(fd, "-ERR Message does not exist!\r\n");
+            send_formatted(fd, "-ERR Message %d does not exist!\r\n", msg_num);
             return;
         }
 
