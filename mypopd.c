@@ -42,6 +42,8 @@ bool command_user(int fd, char **user);
 
 bool command_pass(int fd, char *user);
 
+void command_list(int fd, mail_list_t mail_list);
+
 int main(int argc, char *argv[]) {
 
     if (argc != 2) {
@@ -114,35 +116,36 @@ void handle_client(int fd) {
                 }
                 break;
             case STAT:
-                if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_USERNAME) {
+                if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_PASSWORD) {
                     send_formatted(fd, "-ERR Login first using USER and PASS commands!\r\n");
                 } else {
-                    send_formatted(fd, "+OK STAT received!\r\n");
+                    send_formatted(fd, "+OK %d %d\r\n", get_mail_count(user_mail_list),
+                                   get_mail_list_size(user_mail_list));
                 }
                 break;
             case LIST:
-                if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_USERNAME) {
+                if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_PASSWORD) {
                     send_formatted(fd, "-ERR Login first using USER and PASS commands!\r\n");
                 } else {
-                    send_formatted(fd, "+OK LIST received!\r\n");
+                    command_list(fd, user_mail_list);
                 }
                 break;
             case RETR:
-                if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_USERNAME) {
+                if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_PASSWORD) {
                     send_formatted(fd, "-ERR Login first using USER and PASS commands!\r\n");
                 } else {
                     send_formatted(fd, "+OK RETR received!\r\n");
                 }
                 break;
             case DELE:
-                if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_USERNAME) {
+                if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_PASSWORD) {
                     send_formatted(fd, "-ERR Login first using USER and PASS commands!\r\n");
                 } else {
                     send_formatted(fd, "+OK DELE received!\r\n");
                 }
                 break;
             case RSET:
-                if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_USERNAME) {
+                if (state == AUTHORIZATION_STATE_USERNAME || state == AUTHORIZATION_STATE_PASSWORD) {
                     send_formatted(fd, "-ERR Login first using USER and PASS commands!\r\n");
                 } else {
                     clear();
@@ -170,6 +173,26 @@ void handle_client(int fd) {
     quit:;
     clear();
     nb_destroy(nb);
+}
+
+void command_list(int fd, mail_list_t mail_list) {
+    char *msg_num_input = strtok(NULL, " ");
+
+    if (msg_num_input == NULL) {
+        send_formatted(fd, "+OK %d messages (%d octets)\r\n",
+                       get_mail_count(mail_list), get_mail_list_size(mail_list));
+        // Print all mail
+        return;
+    } else {
+        int msg_num = atoi(msg_num_input);
+        mail_item_t mail_item = get_mail_item(mail_list, msg_num);
+        if (mail_item == NULL || msg_num < 1 || msg_num > get_mail_count(mail_list)) {
+            send_formatted(fd, "-ERR Message does not exist!\r\n");
+            return;
+        }
+
+        send_formatted(fd, "+OK %d %d\r\n", msg_num, get_mail_item_size(mail_item));
+    }
 }
 
 // Process the PASS command
