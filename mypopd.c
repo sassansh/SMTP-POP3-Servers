@@ -166,8 +166,10 @@ void handle_client(int fd) {
                 break;
             case QUIT:
                 if (state == TRANSACTION_STATE) {
-                    send_formatted(fd, "+OK POP3 Server signing off. Bye %s!\r\n", user);
                     state = UPDATE_STATE;
+                    destroy_mail_list(user_mail_list);
+                    send_formatted(fd, "+OK POP3 Server signing off. Bye %s! (%d messages left)\r\n", user,
+                                   get_mail_count(user_mail_list));
                 } else {
                     send_formatted(fd, "+OK POP3 Server signing off\r\n");
                 }
