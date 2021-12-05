@@ -142,7 +142,7 @@ void handle_client(int fd) {
                         // Go to transaction state
                         state = TRANSACTION_STATE;
                     } else {
-                        memset(user, 0, MAX_LINE_LENGTH);
+                        // Password is invalid, go to username state
                         state = AUTHORIZATION_STATE_USERNAME;
                     }
                 } else {
@@ -220,40 +220,51 @@ void handle_client(int fd) {
     nb_destroy(nb);
 }
 
-// Process USER command
+// Process USER command: returns true if the username is valid, false otherwise
 bool command_user(int fd, char **user) {
+    // Read the username
     char *user_input = strtok(NULL, " ");
 
+    // If username is missing, send an error
     if (user_input == NULL) {
         strncpy(*user, "", MAX_LINE_LENGTH);
         send_formatted(fd, "-ERR Mailbox name argument missing for USER command\r\n");
         return 0;
     }
 
+    // Check if the username is valid
     if (is_valid_user(user_input, NULL)) {
+        // Username is valid, store it and send OK message
         send_formatted(fd, "+OK %s is a valid mailbox\r\n", user_input);
         strncpy(*user, user_input, strlen(user_input));
         return 1;
     } else {
+        // Username is not valid, clear user and send ERR message
+        memset(user, 0, MAX_LINE_LENGTH);
         send_formatted(fd, "-ERR No mailbox for %s here\r\n", user_input);
         return 0;
     }
 }
 
-// Process PASS command
+// Process PASS command: returns true if the password is valid and updates user, false otherwise.
 bool command_pass(int fd, char *user) {
+    // Read the password
     char *pass_input = strtok(NULL, " ");
 
+    // If password is missing, send an error
     if (pass_input == NULL) {
         send_formatted(fd, "-ERR No password provided, login again with USER command first\r\n");
         return 0;
     }
 
+    // Check if the password is valid
     if (is_valid_user(user, pass_input)) {
+        // Password is valid, send OK message
         send_formatted(fd, "+OK Logged in successfully, welcome %s! (%d new messages)\r\n", user,
                        get_mail_count(load_user_mail(user)));
         return 1;
     } else {
+        // Password is not valid, send ERR message
         send_formatted(fd, "-ERR Invalid password, login again with USER command first\r\n");
         return 0;
     }
