@@ -240,7 +240,7 @@ bool command_user(int fd, char **user) {
         return 1;
     } else {
         // Username is not valid, clear user and send ERR message
-        memset(user, 0, MAX_LINE_LENGTH);
+        memset(*user, 0, MAX_LINE_LENGTH);
         send_formatted(fd, "-ERR No mailbox for %s here\r\n", user_input);
         return 0;
     }
