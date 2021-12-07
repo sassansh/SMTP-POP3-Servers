@@ -270,14 +270,14 @@ bool command_pass(int fd, char *user) {
     }
 }
 
-// Process STAT command
+// Process STAT command: sends the number of non-deleted messages and their total size
 void command_stat(int fd, mail_list_t mail_list) {
     // Send the mail count and size (not including the deleted mails)
     send_formatted(fd, "+OK %d %zu\r\n", get_mail_count(mail_list),
                    get_mail_list_size(mail_list));
 }
 
-// Process LIST command
+// Process LIST command: sends a list of non-deleted messages and their sizes
 void command_list(int fd, mail_list_t mail_list, unsigned int original_mail_count) {
     // Get argument, if any
     char *msg_num_input = strtok(NULL, " ");
@@ -307,7 +307,7 @@ void command_list(int fd, mail_list_t mail_list, unsigned int original_mail_coun
     }
 }
 
-// Process RETR command
+// Process RETR command: sends the requested message
 void command_retr(int fd, mail_list_t mail_list, unsigned int original_mail_count) {
     // Get the message number
     char *msg_num_input = strtok(NULL, " ");
@@ -340,7 +340,7 @@ void command_retr(int fd, mail_list_t mail_list, unsigned int original_mail_coun
     }
 }
 
-// Process DELE command
+// Process DELE command: deletes the requested message
 void command_dele(int fd, mail_list_t mail_list) {
     // Get the message number
     char *msg_num_input = strtok(NULL, " ");
@@ -365,13 +365,13 @@ void command_dele(int fd, mail_list_t mail_list) {
 
 }
 
-// Process NOOP command
+// Process NOOP command: does nothing, but sends an OK response
 void command_noop(int fd) {
     // Send OK response
     send_formatted(fd, "+OK noop received!\r\n");
 }
 
-// Process RSET command
+// Process RSET command: reset mail marked as deleted
 void command_rset(int fd, mail_list_t mail_list, unsigned int original_mail_count) {
     int deleted_count = original_mail_count - get_mail_count(mail_list);
     reset_mail_list_deleted_flag(mail_list);
@@ -379,7 +379,7 @@ void command_rset(int fd, mail_list_t mail_list, unsigned int original_mail_coun
                    deleted_count);
 }
 
-// Process QUIT command
+// Process QUIT command: destroy mail marked as deleted
 void command_quit(int fd, char *user, mail_list_t mail_list) {
     // Destroy all mail marked for deletion
     destroy_mail_list(mail_list);
