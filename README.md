@@ -51,6 +51,24 @@ You should have [CLion](https://www.jetbrains.com/clion/) and [Git](https://git-
 
 2. Open the project in CLion.
 
+3. To compile, in the termincal run:
+
+   ```bash
+     make clean
+     make all
+   ```
+   
+4. To start the SMTP server on port 25, in the termincal run:
+
+   ```bash
+     ./mysmtpd 25
+   ```
+5. To start the POP3 server on port 110, in the termincal run:
+
+   ```bash
+     ./mypopd 110
+   ```
+
 ## Assignment Description 📚
 
 In this assignment you will use the Unix Socket API to construct two servers typically used in mail exchange: an SMTP server, used for sending emails, and a POP3 server, used to retrieve emails from a mailbox. The executables for these servers will be called, respectively, `mysmtpd` and `mypopd`. Both your programs are to take a single argument, the TCP port the respective server is to listen on for client connections.
